@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanban — Móveis Planejados</title>
+<style>
+:root{
+  --bg:#f5f7fb; --text:#243047; --muted:#697586; --border:#e5e9f0;
+  --shadow:0 4px 14px rgba(35,48,71,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.topbar{height:68px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:10}
+.brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:19px}
+.logo{width:38px;height:38px;border-radius:10px;background:#1769e0;color:white;display:grid;place-items:center;font-weight:900}
+.actions{display:flex;gap:10px}
+.btn{border:1px solid var(--border);background:#fff;border-radius:9px;padding:9px 14px;color:var(--text)}
+.btn.primary{background:#1769e0;color:#fff;border-color:#1769e0}
+.toolbar{padding:18px 24px 10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.search{background:#fff;border:1px solid var(--border);border-radius:9px;padding:10px 13px;min-width:280px;outline:none}
+.filter{background:#fff;border:1px solid var(--border);border-radius:9px;padding:10px 12px}
+.board{display:grid;grid-template-columns:repeat(5,minmax(230px,1fr));gap:12px;padding:10px 20px 28px;align-items:start;overflow-x:auto}
+.column{background:#eef1f5;border-radius:10px;min-height:500px;border:1px solid #e4e8ee}
+.column-head{padding:12px 13px;border-top:4px solid var(--color);background:var(--head);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between}
+.title{display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px}
+.count{min-width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--color);font-size:12px}
+.addcol{border:0;background:transparent;font-size:21px;color:#657184}
+.cards{padding:10px;min-height:430px}
+.card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:9px;box-shadow:var(--shadow);cursor:grab}
+.card:active{cursor:grabbing}
+.card.dragging{opacity:.45}
+.card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.card-id{font-size:12px;font-weight:800;color:#334155}
+.card-actions{display:flex;gap:3px}
+.card-actions button{border:0;background:transparent;color:#7a8494;width:25px;height:25px;border-radius:6px;font-size:16px;line-height:1}
+.card-actions button:hover{background:#eef2f7;color:#243047}
+.customer{font-weight:700;font-size:14px;margin-bottom:7px}
+.meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.badge{font-size:10px;font-weight:800;padding:4px 7px;border-radius:20px;white-space:nowrap}
+.badge.ok{background:#e6f7ea;color:#16823b}.badge.risk{background:#fff0d9;color:#d47700}.badge.late{background:#ffe7e7;color:#df3030}
+.project{font-size:11px;color:#667085;margin-top:7px;border-top:1px solid #edf0f4;padding-top:7px}
+.dropzone{min-height:40px}
+.empty{border:1px dashed #cbd3df;border-radius:8px;padding:15px;text-align:center;color:#8993a3;font-size:12px;background:#f8fafc}
+.footer{padding:0 24px 25px;color:#8792a3;font-size:12px}
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+.modal{background:#fff;width:min(620px,100%);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.2);padding:20px}
+.modal h2{margin:0 0 16px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:1/-1}
+.field label{font-size:12px;font-weight:700;color:#526075}
+.field input,.field select,.field textarea{border:1px solid #dce2ea;border-radius:8px;padding:10px;outline:none}
+.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
+@media(max-width:1050px){.board{grid-template-columns:repeat(5,260px)}}
+@media(max-width:600px){.topbar{padding:0 14px}.toolbar{padding:14px}.board{padding:8px 12px}.form{grid-template-columns:1fr}.field.full{grid-column:auto}.search{min-width:180px;width:100%}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="logo">M</div><span>Kanban — Móveis Planejados</span></div>
+  <div class="actions">
+    <button class="btn" onclick="clearDemo()">Limpar</button>
+    <button class="btn primary" onclick="openModal()">+ Nova Ordem</button>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input id="search" class="search" placeholder="Pesquisar cliente, OP ou projeto..." oninput="render()">
+  <select id="clientFilter" class="filter" onchange="render()">
+    <option value="">Todos os clientes</option>
+  </select>
+  <select id="opFilter" class="filter" onchange="render()">
+    <option value="">Todas as OPs</option>
+  </select>
+  <select id="typeFilter" class="filter" onchange="render()">
+    <option value="">Todos os tipos de móveis</option>
+  </select>
+  <select id="statusFilter" class="filter" onchange="render()">
+    <option value="">Todos os status</option>
+    <option value="ok">No prazo</option>
+    <option value="risk">Risco</option>
+    <option value="late">Atrasado</option>
+  </select>
+  <button class="btn" onclick="clearFilters()">Limpar filtros</button>
+</div>
+
+<main id="board" class="board"></main>
+<div class="footer">Arraste os cartões entre as etapas. Os dados ficam salvos automaticamente neste navegador.</div>
+
+<div id="modalBg" class="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2>Nova ordem de produção</h2>
+    <form id="form" onsubmit="saveCard(event)">
+      <div class="form">
+        <div class="field"><label>Nº da OP</label><input id="op" required placeholder="Ex.: 2462"></div>
+        <div class="field"><label>Cliente</label><input id="customer" required placeholder="Nome do cliente"></div>
+        <div class="field"><label>Projeto / ambiente</label><input id="project" placeholder="Ex.: Cozinha planejada"></div>
+        <div class="field"><label>Tipo de móvel</label>
+          <select id="type">
+            <option value="">Selecione</option>
+            <option>Cozinha</option><option>Quarto</option><option>Closet</option><option>Armário</option>
+            <option>Painel</option><option>Sala</option><option>Home Office</option><option>Lavanderia</option><option>Banheiro</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="field"><label>Responsável</label><input id="responsible" placeholder="Ex.: João"></div>
+        <div class="field"><label>Data de entrega</label><input id="date" type="date" required></div>
+        <div class="field"><label>Status</label>
+          <select id="status"><option value="ok">No prazo</option><option value="risk">Risco</option><option value="late">Atrasado</option></select>
+        </div>
+        <div class="field full"><label>Observações</label><textarea id="notes" rows="3" placeholder="Informações importantes da ordem..."></textarea></div>
+      </div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary">Criar ordem</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const stages=[
+ {id:'desenvolvimento',name:'DESENVOLVIMENTO',color:'#16a34a',head:'#edf9f0'},
+ {id:'corte',name:'CORTE',color:'#2563eb',head:'#edf4ff'},
+ {id:'coladeira',name:'COLADEIRA',color:'#f59e0b',head:'#fff8e9'},
+ {id:'pre-montagem',name:'PRÉ-MONTAGEM',color:'#0ea5e9',head:'#eef9fe'},
+ {id:'instalacao',name:'INSTALAÇÃO',color:'#9333ea',head:'#f8efff'},
+ {id:'finalizado',name:'FINALIZADO',color:'#16a34a',head:'#edf9f0'}
+];
+
+const demo=[
+ {id:2458,customer:'João da Silva',date:'2026-10-02',status:'late',project:'Cozinha planejada',type:'Cozinha',responsible:'Marcos',stage:'corte'},
+ {id:2459,customer:'Carlos Oliveira',date:'2026-10-04',status:'risk',project:'Quarto casal',type:'Quarto',responsible:'Ana',stage:'corte'},
+ {id:2461,customer:'Maria Santos',date:'2026-10-07',status:'ok',project:'Painel sala',type:'Painel',responsible:'João',stage:'corte'},
+ {id:2452,customer:'Ana Beatriz',date:'2026-10-03',status:'ok',project:'Closet',type:'Closet',responsible:'Pedro',stage:'coladeira'},
+ {id:2454,customer:'Pedro Henrique',date:'2026-10-04',status:'risk',project:'Cozinha planejada',type:'Cozinha',responsible:'Ana',stage:'coladeira'},
+ {id:2460,customer:'Juliana Costa',date:'2026-10-07',status:'ok',project:'Lavanderia',type:'Lavanderia',responsible:'Pedro',stage:'coladeira'},
+ {id:2451,customer:'Marcos Vinicius',date:'2026-10-01',status:'late',project:'Armário quarto',type:'Armário',responsible:'Marcos',stage:'pre-montagem'},
+ {id:2457,customer:'Thiago Martins',date:'2026-10-04',status:'risk',project:'Home office',type:'Home Office',responsible:'João',stage:'pre-montagem'},
+ {id:2458,customer:'João da Silva',date:'2026-10-02',status:'ok',project:'Cozinha planejada',type:'Cozinha',responsible:'Marcos',stage:'pre-montagem'},
+ {id:2450,customer:'José Ricardo',date:'2026-10-01',status:'ok',project:'Quarto casal',type:'Quarto',responsible:'Ana',stage:'instalacao'},
+ {id:2453,customer:'Carla Nunes',date:'2026-10-03',status:'ok',project:'Sala',type:'Sala',responsible:'João',stage:'instalacao'},
+ {id:2455,customer:'Paulo Henrique',date:'2026-10-04',status:'ok',project:'Closet',type:'Closet',responsible:'Pedro',stage:'instalacao'},
+ {id:2449,customer:'Fernanda Alves',date:'2026-10-09',status:'ok',project:'Cozinha',type:'Cozinha',responsible:'Ana',stage:'desenvolvimento'}
+];
+
+let cards=JSON.parse(localStorage.getItem('kanbanMoveis'))||demo;
+cards=cards.map(c=>({
+  ...c,
+  stage:stages.some(s=>s.id===c.stage)?c.stage:'desenvolvimento',
+  type:c.type||inferType(c.project)
+}));
+let draggedId=null;
+
+function inferType(project){
+  const p=String(project||'').toLowerCase();
+  if(p.includes('cozinha')) return 'Cozinha';
+  if(p.includes('closet')) return 'Closet';
+  if(p.includes('quarto')) return 'Quarto';
+  if(p.includes('painel')) return 'Painel';
+  if(p.includes('lavanderia')) return 'Lavanderia';
+  if(p.includes('sala')) return 'Sala';
+  if(p.includes('home')) return 'Home Office';
+  if(p.includes('armário')||p.includes('armario')) return 'Armário';
+  return '';
+}
+
+function save(){localStorage.setItem('kanbanMoveis',JSON.stringify(cards))}
+function statusLabel(s){return s==='ok'?'No prazo':s==='risk'?'Risco':'Atrasado'}
+function formatDate(d){if(!d)return ''; const [y,m,day]=d.split('-'); return `${day}/${m}/${y.slice(2)}`}
+function render(){
+  const q=(document.getElementById('search')?.value||'').toLowerCase().trim();
+  const sf=document.getElementById('statusFilter')?.value||'';
+  const cf=document.getElementById('clientFilter')?.value||'';
+  const of=document.getElementById('opFilter')?.value||'';
+  const tf=document.getElementById('typeFilter')?.value||'';
+
+  const clients=[...new Set(cards.map(c=>c.customer).filter(Boolean))].sort();
+  const ops=[...new Set(cards.map(c=>String(c.id)).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const types=[...new Set(cards.map(c=>c.type).filter(Boolean))].sort();
+
+  const cs=document.getElementById('clientFilter');
+  const os=document.getElementById('opFilter');
+  const ts=document.getElementById('typeFilter');
+
+  cs.innerHTML='<option value="">Todos os clientes</option>'+clients.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  os.innerHTML='<option value="">Todas as OPs</option>'+ops.map(x=>`<option value="${esc(x)}">OP #${esc(x)}</option>`).join('');
+  ts.innerHTML='<option value="">Todos os tipos de móveis</option>'+types.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+
+  cs.value=clients.includes(cf)?cf:'';
+  os.value=ops.includes(of)?of:'';
+  ts.value=types.includes(tf)?tf:'';
+
+  document.getElementById('board').innerHTML=stages.map(st=>{
+    const arr=cards.filter(c=>
+      c.stage===st.id &&
+      (!sf||c.status===sf) &&
+      (!cf||c.customer===cf) &&
+      (!of||String(c.id)===of) &&
+      (!tf||c.type===tf) &&
+      (!q || `${c.id} ${c.customer} ${c.project} ${c.type}`.toLowerCase().includes(q))
+    );
+    return `<section class="column" style="--color:${st.color};--head:${st.head}">
+      <div class="column-head">
+        <div class="title">${st.name}<span class="count">${arr.length}</span></div>
+        <button class="addcol" onclick="openModal('${st.id}')">+</button>
+      </div>
+      <div class="cards" data-stage="${st.id}" ondragover="event.preventDefault()" ondrop="drop(event,'${st.id}')">
+        ${arr.length?arr.map(cardHtml).join(''):'<div class="empty">Nenhuma OP nesta etapa</div>'}
+      </div>
+    </section>`;
+  }).join('');
+}
+
+function clearFilters(){
+  document.getElementById('search').value='';
+  document.getElementById('clientFilter').value='';
+  document.getElementById('opFilter').value='';
+  document.getElementById('typeFilter').value='';
+  document.getElementById('statusFilter').value='';
+  render();
+}
+function cardHtml(c){
+ return `<article class="card" draggable="true" data-id="${c.id}" ondragstart="dragStart(event,${c.id})">
+   <div class="card-top">
+     <div class="card-id">#${c.id}</div>
+     <div class="card-actions">
+       <button title="Editar OP" onclick="event.stopPropagation();editCard(${c.id})">✎</button>
+       <button title="Excluir OP" onclick="event.stopPropagation();deleteCard(${c.id})">×</button>
+     </div>
+   </div>
+   <div class="customer">${esc(c.customer)}</div>
+   <div class="meta"><span>Entrega: ${formatDate(c.date)}</span><span class="badge ${c.status}">${statusLabel(c.status)}</span></div>
+   ${c.project||c.type||c.responsible?`<div class="project">${c.type?esc(c.type):''}${c.project&&c.type?' · ':''}${c.project?esc(c.project):''}${(c.responsible&&(c.project||c.type))?' · ':''}${c.responsible?esc(c.responsible):''}</div>`:''}
+ </article>`;
+}
+function dragStart(e,id){draggedId=id;e.currentTarget.classList.add('dragging')}
+function drop(e,stage){e.preventDefault();const c=cards.find(x=>x.id===draggedId);if(c){c.stage=stage;save();render()}}
+function openModal(stage='desenvolvimento'){
+ document.getElementById('form').reset(); document.getElementById('op').value=Math.max(0,...cards.map(c=>Number(c.id)||0))+1;
+ document.getElementById('date').value=new Date().toISOString().slice(0,10);
+ window.modalStage=stage; window.editingId=null;
+ document.querySelector('#modalBg h2').textContent='Nova ordem de produção';
+ document.querySelector('#form .modal-actions .primary').textContent='Criar ordem';
+ document.getElementById('modalBg').style.display='flex';
+}
+function closeModal(){document.getElementById('modalBg').style.display='none'}
+function saveCard(e){
+ e.preventDefault();
+ const data={
+   id:Number(document.getElementById('op').value),
+   customer:document.getElementById('customer').value,
+   date:document.getElementById('date').value,
+   status:document.getElementById('status').value,
+   project:document.getElementById('project').value,
+   type:document.getElementById('type').value,
+   responsible:document.getElementById('responsible').value,
+   notes:document.getElementById('notes').value,
+   stage:window.modalStage||'desenvolvimento'
+ };
+ if(window.editingId){
+   const index=cards.findIndex(x=>x.id===window.editingId);
+   if(index>=0) cards[index]=data;
+ } else {
+   if(cards.some(x=>x.id===data.id)){
+     alert('Já existe uma OP com este número.');
+     return;
+   }
+   cards.push(data);
+ }
+ window.editingId=null;
+ save();
+ clearFilters();
+ closeModal();
+ render();
+}
+function editCard(id){
+ const c=cards.find(x=>x.id===id); if(!c)return;
+ document.getElementById('op').value=c.id;
+ document.getElementById('customer').value=c.customer||'';
+ document.getElementById('project').value=c.project||'';
+ document.getElementById('type').value=c.type||'';
+ document.getElementById('responsible').value=c.responsible||'';
+ document.getElementById('date').value=c.date||'';
+ document.getElementById('status').value=c.status||'ok';
+ document.getElementById('notes').value=c.notes||'';
+ window.modalStage=c.stage;
+ window.editingId=id;
+ document.querySelector('#modalBg h2').textContent='Editar ordem de produção';
+ document.querySelector('#form .modal-actions .primary').textContent='Salvar alterações';
+ document.getElementById('modalBg').style.display='flex';
+}
+function deleteCard(id){
+ const c=cards.find(x=>x.id===id); if(!c)return;
+ if(confirm(`Excluir a OP #${c.id} — ${c.customer}?\n\nEsta ação não poderá ser desfeita.`)){
+   cards=cards.filter(x=>x.id!==id);
+   save();render();
+ }
+}
+function clearDemo(){if(confirm('Apagar todas as ordens deste navegador?')){cards=[];save();render()}}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+render();
+</script>
+</body>
+</html>
