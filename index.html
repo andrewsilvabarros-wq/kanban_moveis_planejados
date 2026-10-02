@@ -56,6 +56,9 @@ button{cursor:pointer}
 .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}
 @media(max-width:1050px){.board{grid-template-columns:repeat(5,260px)}}
 @media(max-width:600px){.topbar{padding:0 14px}.toolbar{padding:14px}.board{padding:8px 12px}.form{grid-template-columns:1fr}.field.full{grid-column:auto}.search{min-width:180px;width:100%}}
+
+.auto-label{font-weight:600;font-size:11px;opacity:.7}
+.hint{display:block;margin-top:5px;font-size:11px;line-height:1.3;opacity:.7}
 </style>
 </head>
 <body>
@@ -165,9 +168,35 @@ function inferType(project){
 }
 
 function save(){localStorage.setItem('kanbanMoveis',JSON.stringify(cards))}
+function todayLocal(){
+ const d=new Date();
+ const y=d.getFullYear();
+ const m=String(d.getMonth()+1).padStart(2,'0');
+ const day=String(d.getDate()).padStart(2,'0');
+ return `${y}-${m}-${day}`;
+}
+function calculateStatus(date, stage){
+ if(!date || stage==='finalizado') return 'ok';
+ const today=new Date(todayLocal()+'T00:00:00');
+ const due=new Date(date+'T00:00:00');
+ const diff=Math.round((due-today)/86400000);
+ if(diff<0) return 'late';
+ if(diff<=2) return 'risk';
+ return 'ok';
+}
+function updateDeadlineStatuses(){
+ let changed=false;
+ cards.forEach(c=>{
+   const next=calculateStatus(c.date,c.stage);
+   if(c.status!==next){c.status=next;changed=true;}
+ });
+ if(changed) save();
+ return changed;
+}
 function statusLabel(s){return s==='ok'?'No prazo':s==='risk'?'Risco':'Atrasado'}
 function formatDate(d){if(!d)return ''; const [y,m,day]=d.split('-'); return `${day}/${m}/${y.slice(2)}`}
 function render(){
+  updateDeadlineStatuses();
   const q=(document.getElementById('search')?.value||'').toLowerCase().trim();
   const sf=document.getElementById('statusFilter')?.value||'';
   const cf=document.getElementById('clientFilter')?.value||'';
@@ -250,7 +279,7 @@ function saveCard(e){
    id:Number(document.getElementById('op').value),
    customer:document.getElementById('customer').value,
    date:document.getElementById('date').value,
-   status:document.getElementById('status').value,
+   status:calculateStatus(document.getElementById('date').value,window.modalStage||'desenvolvimento'),
    project:document.getElementById('project').value,
    type:document.getElementById('type').value,
    responsible:document.getElementById('responsible').value,
@@ -281,7 +310,7 @@ function editCard(id){
  document.getElementById('type').value=c.type||'';
  document.getElementById('responsible').value=c.responsible||'';
  document.getElementById('date').value=c.date||'';
- document.getElementById('status').value=c.status||'ok';
+ document.getElementById('status').value=calculateStatus(c.date,c.stage);
  document.getElementById('notes').value=c.notes||'';
  window.modalStage=c.stage;
  window.editingId=id;
@@ -299,6 +328,7 @@ function deleteCard(id){
 function clearDemo(){if(confirm('Apagar todas as ordens deste navegador?')){cards=[];save();render()}}
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 render();
+setInterval(()=>{ if(updateDeadlineStatuses()) render(); },60000);
 </script>
 </body>
 </html>
